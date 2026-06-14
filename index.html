@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Round Timer</title>
+<style>
+  :root{
+    --bg:#0b1120; --panel:#111a2e; --panel2:#1b2740; --line:#27344f;
+    --text:#f1f5f9; --muted:#8a9bbb; --accent:#22c55e;
+    --work:#16a34a; --rest:#d97706; --prep:#2563eb; --done:#7c3aed; --idle:#1e293b;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text);
+    overflow:hidden; position:fixed; inset:0;
+    -webkit-user-select:none; user-select:none;
+  }
+  .screen{position:absolute; inset:0; display:flex; flex-direction:column; transition:background .35s ease;}
+  .hidden{display:none !important;}
+
+  /* ---------- CONFIG SCREEN ---------- */
+  #config{padding:max(16px,env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); overflow-y:auto;}
+  .brand{display:flex; align-items:center; gap:10px; margin:6px 2px 14px;}
+  .brand .dot{width:14px; height:14px; border-radius:50%; background:var(--accent); box-shadow:0 0 14px var(--accent);}
+  .brand h1{font-size:20px; letter-spacing:.5px; margin:0; font-weight:800;}
+  .brand .mute{margin-left:auto;}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:0 0 12px;}
+
+  .row{display:flex; align-items:center; justify-content:space-between; gap:8px 12px; padding:8px 0; flex-wrap:wrap;}
+  .row + .row{border-top:1px solid var(--line);}
+  .row > :first-child{min-width:0; flex:1 1 auto;}
+  .row .label{font-size:16px; font-weight:600;}
+  .row .sub{font-size:12px; color:var(--muted); margin-top:2px;}
+
+  .stepper{display:flex; align-items:center; gap:0; background:var(--panel2); border-radius:12px; overflow:hidden; border:1px solid var(--line); flex:0 0 auto;}
+  .row > .stepper{margin-left:auto;}
+  .stepper button{width:42px; height:44px; border:0; background:transparent; color:var(--text); font-size:24px; font-weight:700; line-height:1; cursor:pointer;}
+  .stepper button:active{background:rgba(255,255,255,.08);}
+  .stepper .val{min-width:42px; text-align:center; font-size:20px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .timefield{display:flex; align-items:center; gap:6px; margin-left:auto; flex:0 0 auto;}
+  .timefield .colon{font-size:20px; font-weight:800; color:var(--muted);}
+
+  @media (max-width:400px){
+    #config{padding-left:12px; padding-right:12px;}
+    .card{padding:12px;}
+    .stepper button{width:38px; height:42px; font-size:21px;}
+    .stepper .val{min-width:36px; font-size:18px;}
+    .timefield{gap:4px;}
+    .row .label{font-size:15px;}
+  }
+
+  .toggle{position:relative; width:58px; height:34px; border-radius:20px; background:var(--panel2); border:1px solid var(--line); cursor:pointer; transition:background .2s;}
+  .toggle .knob{position:absolute; top:3px; left:3px; width:26px; height:26px; border-radius:50%; background:#64748b; transition:.2s;}
+  .toggle.on{background:var(--accent); border-color:var(--accent);}
+  .toggle.on .knob{left:27px; background:#fff;}
+
+  .presets{display:flex; flex-wrap:wrap; gap:8px;}
+  .preset{position:relative; background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px; cursor:pointer; min-width:88px;}
+  .preset .pname{font-size:14px; font-weight:700; margin-bottom:2px;}
+  .preset .pmeta{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums;}
+  .preset .del{position:absolute; top:-7px; right:-7px; width:22px; height:22px; border-radius:50%; background:#ef4444; color:#fff; border:0; font-size:13px; line-height:22px; padding:0; cursor:pointer; display:none;}
+  .preset.custom .del{display:block;}
+  .preset:active{border-color:var(--accent);}
+
+  .soundbtns{display:flex; flex-wrap:wrap; gap:8px;}
+  .soundbtns button{flex:1; min-width:120px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; color:var(--text); padding:12px; font-size:13px; font-weight:600; cursor:pointer;}
+  .soundbtns button:active{background:rgba(255,255,255,.08);}
+
+  .savebtn{width:100%; background:var(--panel2); border:1px dashed var(--line); color:var(--muted); border-radius:12px; padding:12px; font-size:14px; font-weight:600; cursor:pointer;}
+
+  .startbtn{
+    width:100%; padding:20px; border:0; border-radius:18px;
+    background:var(--accent); color:#04210f; font-size:22px; font-weight:900; letter-spacing:1px;
+    cursor:pointer; box-shadow:0 8px 28px rgba(34,197,94,.35); margin-top:4px;
+  }
+  .startbtn:active{transform:translateY(1px);}
+
+  /* ---------- RUN SCREEN ---------- */
+  #run{align-items:center; justify-content:center; text-align:center; padding:env(safe-area-inset-top) 18px env(safe-area-inset-bottom);}
+  #run.phase-work{background:var(--work);}
+  #run.phase-rest{background:var(--rest);}
+  #run.phase-prep{background:var(--prep);}
+  #run.phase-done{background:var(--done);}
+  #run.phase-idle{background:var(--idle);}
+
+  .runtop{position:absolute; top:max(14px,env(safe-area-inset-top)); left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:0 18px;}
+  .runtop .edit{background:rgba(0,0,0,.22); border:0; color:#fff; padding:10px 14px; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;}
+  .runtop .rounds{background:rgba(0,0,0,.22); padding:10px 14px; border-radius:12px; font-size:15px; font-weight:800; font-variant-numeric:tabular-nums;}
+
+  .phaselabel{font-size:clamp(28px,9vw,46px); font-weight:900; letter-spacing:3px; text-transform:uppercase; margin-bottom:4px; text-shadow:0 2px 12px rgba(0,0,0,.25);}
+  .bigtime{font-size:clamp(96px,34vw,220px); font-weight:900; line-height:.95; font-variant-numeric:tabular-nums; text-shadow:0 6px 30px rgba(0,0,0,.3);}
+  .nextlabel{font-size:16px; font-weight:700; opacity:.85; margin-top:8px; min-height:20px; text-transform:uppercase; letter-spacing:1px;}
+
+  .progress{position:absolute; left:0; right:0; bottom:calc(120px + env(safe-area-inset-bottom)); height:8px; background:rgba(0,0,0,.22);}
+  .progress .bar{height:100%; width:0%; background:rgba(255,255,255,.9); transition:width .15s linear;}
+
+  .controls{position:absolute; left:0; right:0; bottom:max(20px,env(safe-area-inset-bottom)); display:flex; gap:12px; padding:0 18px;}
+  .controls button{flex:1; padding:22px 0; border:0; border-radius:16px; font-size:20px; font-weight:900; letter-spacing:1px; cursor:pointer; background:rgba(255,255,255,.95); color:#0b1120;}
+  .controls button.ghost{background:rgba(0,0,0,.25); color:#fff;}
+  .controls button:active{transform:translateY(1px);}
+
+  .flash{animation:flash .5s ease;}
+  @keyframes flash{0%{filter:brightness(1.6);}100%{filter:brightness(1);}}
+
+  /* ---------- QUOTE OVERLAY ---------- */
+  #quoteOverlay{position:fixed; inset:0; z-index:200; background:radial-gradient(120% 120% at 50% 0%,#15213b 0%,#0b1120 70%); display:flex; align-items:center; justify-content:center; padding:34px 28px calc(34px + env(safe-area-inset-bottom)); text-align:center; animation:qfade .45s ease;}
+  #quoteOverlay.hide{opacity:0; pointer-events:none; transition:opacity .4s ease;}
+  .quotebox{max-width:580px; display:flex; flex-direction:column; align-items:center;}
+  .qmark{font-size:64px; line-height:.5; color:var(--accent); font-weight:900; margin-bottom:10px;}
+  .qtext{font-size:clamp(21px,5.6vw,30px); font-weight:800; line-height:1.38; text-wrap:balance;}
+  .qauthor{margin-top:20px; font-size:13px; letter-spacing:2.5px; text-transform:uppercase; color:var(--muted); font-weight:700;}
+  .qbtn{margin-top:36px; background:var(--accent); color:#04210f; border:0; border-radius:14px; padding:16px 34px; font-size:17px; font-weight:900; letter-spacing:.5px; cursor:pointer; box-shadow:0 8px 28px rgba(34,197,94,.35);}
+  .qbtn:active{transform:translateY(1px);}
+  .qhint{margin-top:16px; font-size:11px; color:var(--muted); opacity:.7; letter-spacing:1px;}
+  @keyframes qfade{from{opacity:0; transform:translateY(10px);}to{opacity:1; transform:none;}}
+</style>
+</head>
+<body>
+
+<!-- ============ QUOTE ON OPEN ============ -->
+<div id="quoteOverlay" onclick="dismissQuote(event)">
+  <div class="quotebox">
+    <div class="qmark">&ldquo;</div>
+    <div class="qtext" id="qText"></div>
+    <div class="qauthor" id="qAuthor"></div>
+    <button class="qbtn" onclick="dismissQuote(event)">Let&rsquo;s go &#129354;</button>
+    <div class="qhint">tap anywhere to begin</div>
+  </div>
+</div>
+
+<!-- ============ CONFIG ============ -->
+<div id="config" class="screen">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>ROUND TIMER</h1>
+    <div class="mute row" style="padding:0;">
+      <div class="toggle" id="muteToggle" onclick="toggleMute()"><div class="knob"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Presets</h2>
+    <div class="presets" id="presetList"></div>
+    <div style="height:10px"></div>
+    <button class="savebtn" onclick="saveCurrentPreset()">+ Save current settings as preset</button>
+  </div>
+
+  <div class="card">
+    <h2>Rounds</h2>
+    <div class="row">
+      <div><div class="label">Number of rounds</div></div>
+      <div class="stepper">
+        <button onclick="bump('rounds',-1)">−</button>
+        <span class="val" id="v_rounds">12</span>
+        <button onclick="bump('rounds',1)">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Work (each round)</h2>
+    <div class="row">
+      <div><div class="label">Round length</div><div class="sub">minutes : seconds</div></div>
+      <div class="timefield">
+        <div class="stepper">
+          <button onclick="bump('workMin',-1)">−</button><span class="val" id="v_workMin">3</span><button onclick="bump('workMin',1)">+</button>
+        </div>
+        <span class="colon">:</span>
+        <div class="stepper">
+          <button onclick="bump('workSec',-5)">−</button><span class="val" id="v_workSec">00</span><button onclick="bump('workSec',5)">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Rest (between rounds)</h2>
+    <div class="row">
+      <div><div class="label">Rest length</div><div class="sub">minutes : seconds</div></div>
+      <div class="timefield">
+        <div class="stepper">
+          <button onclick="bump('restMin',-1)">−</button><span class="val" id="v_restMin">1</span><button onclick="bump('restMin',1)">+</button>
+        </div>
+        <span class="colon">:</span>
+        <div class="stepper">
+          <button onclick="bump('restSec',-5)">−</button><span class="val" id="v_restSec">00</span><button onclick="bump('restSec',5)">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Get Ready & Warning</h2>
+    <div class="row">
+      <div><div class="label">Prepare countdown</div><div class="sub">seconds before round 1</div></div>
+      <div class="stepper">
+        <button onclick="bump('prepare',-5)">−</button><span class="val" id="v_prepare">10</span><button onclick="bump('prepare',5)">+</button>
+      </div>
+    </div>
+    <div class="row">
+      <div><div class="label">End-of-round warning</div><div class="sub">beeps near the end of work</div></div>
+      <div class="toggle on" id="warnToggle" onclick="toggleWarn()"><div class="knob"></div></div>
+    </div>
+    <div class="row" id="warnSecRow">
+      <div><div class="label">Warning at</div><div class="sub">seconds remaining</div></div>
+      <div class="stepper">
+        <button onclick="bump('warnSec',-1)">−</button><span class="val" id="v_warnSec">10</span><button onclick="bump('warnSec',1)">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Test sounds</h2>
+    <div class="soundbtns">
+      <button onclick="playRoundStart()">Round start</button>
+      <button onclick="playRest()">Round end &middot; DING&times;3</button>
+      <button onclick="playWarning()">Warning</button>
+      <button onclick="playComplete()">Finish bell</button>
+    </div>
+  </div>
+
+  <button class="startbtn" onclick="startWorkout()">START WORKOUT</button>
+  <div style="height:8px"></div>
+</div>
+
+<!-- ============ RUN ============ -->
+<div id="run" class="screen phase-idle hidden">
+  <div class="runtop">
+    <button class="edit" onclick="stopWorkout()">‹ Edit</button>
+    <div class="rounds" id="roundCounter">Round 1 / 12</div>
+  </div>
+
+  <div class="phaselabel" id="phaseLabel">GET READY</div>
+  <div class="bigtime" id="bigTime">0:10</div>
+  <div class="nextlabel" id="nextLabel"></div>
+
+  <div class="progress"><div class="bar" id="progressBar"></div></div>
+
+  <div class="controls">
+    <button class="ghost" id="resetBtn" onclick="resetWorkout()">RESET</button>
+    <button id="pauseBtn" onclick="togglePause()">PAUSE</button>
+  </div>
+</div>
+
+<script>
+/* ===================== STATE & CONFIG ===================== */
+var cfg = { rounds:12, workMin:3, workSec:0, restMin:1, restSec:0, prepare:10, warn:true, warnSec:10, muted:false };
+
+var limits = {
+  rounds:[1,99,1], workMin:[0,30,1], workSec:[0,55,5], restMin:[0,30,1], restSec:[0,55,5],
+  prepare:[0,60,5], warnSec:[1,30,1]
+};
+
+var DEFAULT_PRESETS = [
+  {name:"Classic Boxing", custom:false, cfg:{rounds:12,workMin:3,workSec:0,restMin:1,restSec:0,prepare:10,warn:true,warnSec:10}},
+  {name:"Amateur 3x3",    custom:false, cfg:{rounds:3, workMin:3,workSec:0,restMin:1,restSec:0,prepare:10,warn:true,warnSec:10}},
+  {name:"HIIT Quick",     custom:false, cfg:{rounds:8, workMin:0,workSec:30,restMin:0,restSec:15,prepare:10,warn:true,warnSec:5}}
+];
+
+/* ===================== PERSISTENCE ===================== */
+function loadStore(){
+  try{
+    var saved = JSON.parse(localStorage.getItem('rt_cfg'));
+    if(saved) cfg = Object.assign(cfg, saved);
+  }catch(e){}
+}
+function saveCfg(){ try{ localStorage.setItem('rt_cfg', JSON.stringify(cfg)); }catch(e){} }
+function getPresets(){
+  try{ var p = JSON.parse(localStorage.getItem('rt_presets')); if(Array.isArray(p)) return p; }catch(e){}
+  return [];
+}
+function setPresets(p){ try{ localStorage.setItem('rt_presets', JSON.stringify(p)); }catch(e){} }
+
+/* ===================== CONFIG UI ===================== */
+function clampVal(key,val){ var l=limits[key]; if(val<l[0])val=l[0]; if(val>l[1])val=l[1]; return val; }
+function bump(key,delta){
+  cfg[key] = clampVal(key, (cfg[key]||0)+delta);
+  renderConfig(); saveCfg();
+}
+function pad(n){ return (n<10?'0':'')+n; }
+function renderConfig(){
+  document.getElementById('v_rounds').textContent = cfg.rounds;
+  document.getElementById('v_workMin').textContent = cfg.workMin;
+  document.getElementById('v_workSec').textContent = pad(cfg.workSec);
+  document.getElementById('v_restMin').textContent = cfg.restMin;
+  document.getElementById('v_restSec').textContent = pad(cfg.restSec);
+  document.getElementById('v_prepare').textContent = cfg.prepare;
+  document.getElementById('v_warnSec').textContent = cfg.warnSec;
+  document.getElementById('warnToggle').classList.toggle('on', cfg.warn);
+  document.getElementById('warnSecRow').style.opacity = cfg.warn ? '1' : '.4';
+  document.getElementById('muteToggle').classList.toggle('on', cfg.muted);
+}
+function toggleWarn(){ cfg.warn=!cfg.warn; renderConfig(); saveCfg(); }
+function toggleMute(){ cfg.muted=!cfg.muted; if(masterGain) masterGain.gain.value = cfg.muted?0:1; renderConfig(); saveCfg(); }
+
+function renderPresets(){
+  var list = document.getElementById('presetList');
+  list.innerHTML='';
+  var all = DEFAULT_PRESETS.concat(getPresets());
+  all.forEach(function(p,i){
+    var el = document.createElement('div');
+    el.className = 'preset' + (p.custom?' custom':'');
+    var w = p.cfg.workMin+':'+pad(p.cfg.workSec);
+    var r = p.cfg.restMin+':'+pad(p.cfg.restSec);
+    el.innerHTML = '<div class="pname">'+p.name+'</div><div class="pmeta">'+p.cfg.rounds+' × '+w+' / '+r+'</div>';
+    el.onclick = function(e){ if(e.target.classList.contains('del'))return; applyPreset(p.cfg); };
+    if(p.custom){
+      var del = document.createElement('button'); del.className='del'; del.textContent='×';
+      del.onclick=function(e){ e.stopPropagation(); deletePreset(p.name); };
+      el.appendChild(del);
+    }
+    list.appendChild(el);
+  });
+}
+function applyPreset(pc){ cfg = Object.assign(cfg, pc); renderConfig(); saveCfg(); }
+function saveCurrentPreset(){
+  var name = prompt('Name this preset:', 'My Workout');
+  if(!name) return;
+  var list = getPresets();
+  list = list.filter(function(p){ return p.name!==name; });
+  list.push({name:name, custom:true, cfg:{
+    rounds:cfg.rounds,workMin:cfg.workMin,workSec:cfg.workSec,restMin:cfg.restMin,restSec:cfg.restSec,
+    prepare:cfg.prepare,warn:cfg.warn,warnSec:cfg.warnSec
+  }});
+  setPresets(list); renderPresets();
+}
+function deletePreset(name){
+  setPresets(getPresets().filter(function(p){ return p.name!==name; }));
+  renderPresets();
+}
+
+/* ===================== AUDIO (Web Audio API) ===================== */
+var audioCtx=null, masterGain=null;
+function ensureAudio(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = cfg.muted?0:1;
+    masterGain.connect(audioCtx.destination);
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+function beep(freq, start, dur, type, vol){
+  var o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type||'sine'; o.frequency.value=freq;
+  o.connect(g); g.connect(masterGain);
+  var t=audioCtx.currentTime+start;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol||0.5,t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t); o.stop(t+dur+0.02);
+}
+function bell(start, base, vol){
+  var partials=[[1,1],[2.01,0.5],[3.0,0.28],[4.18,0.13]];
+  partials.forEach(function(p){
+    var o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=base*p[0];
+    o.connect(g); g.connect(masterGain);
+    var t=audioCtx.currentTime+start;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime((vol||0.55)*p[1], t+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+1.3);
+    o.start(t); o.stop(t+1.4);
+  });
+}
+// Loud, bright boxing-ring bell — one clang
+function boxingBell(start, vol){
+  vol = vol || 0.9;
+  var t0 = audioCtx.currentTime + start;
+  var partials = [[1,1.0],[1.5,0.55],[2.7,0.65],[5.4,0.4],[8.2,0.22]];
+  partials.forEach(function(p){
+    var o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=600*p[0];
+    o.connect(g); g.connect(masterGain);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(vol*p[1], t0+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+1.5);
+    o.start(t0); o.stop(t0+1.6);
+  });
+  var o2=audioCtx.createOscillator(), g2=audioCtx.createGain();   // metallic ping on top
+  o2.type='triangle'; o2.frequency.value=1820;
+  o2.connect(g2); g2.connect(masterGain);
+  g2.gain.setValueAtTime(0.0001,t0);
+  g2.gain.exponentialRampToValueAtTime(vol*0.5,t0+0.003);
+  g2.gain.exponentialRampToValueAtTime(0.0001,t0+0.45);
+  o2.start(t0); o2.stop(t0+0.55);
+}
+function playRoundStart(){ ensureAudio(); bell(0,784,0.6); }                                  // single ding to start work
+function playRest(){ ensureAudio(); boxingBell(0,0.95); boxingBell(0.3,0.95); boxingBell(0.6,0.95); }   // END OF ROUND: DING DING DING
+function playWarning(){ ensureAudio(); for(var i=0;i<3;i++){ beep(1046,i*0.2,0.12,'sine',0.5);} }   // 3 high beeps
+function playPrepBeep(){ ensureAudio(); beep(523,0,0.12,'sine',0.4); }
+function playComplete(){ ensureAudio(); boxingBell(0,1.0); boxingBell(0.32,1.0); boxingBell(0.64,1.0); } // FINISH: DING DING DING
+
+/* ===================== TIMER ENGINE ===================== */
+var run = { active:false, paused:false, schedule:[], idx:0, endAt:0, remaining:0, warned:false, total:0 };
+var ticker=null, wakeLock=null;
+
+function secs(m,s){ return m*60+s; }
+function buildSchedule(){
+  var s=[];
+  var work=secs(cfg.workMin,cfg.workSec);
+  var rest=secs(cfg.restMin,cfg.restSec);
+  if(cfg.prepare>0) s.push({type:'prep', dur:cfg.prepare});
+  for(var r=1;r<=cfg.rounds;r++){
+    s.push({type:'work', dur:work, round:r});
+    if(r<cfg.rounds && rest>0) s.push({type:'rest', dur:rest, round:r});
+  }
+  s.push({type:'done', dur:0});
+  return s;
+}
+
+function startWorkout(){
+  ensureAudio();
+  if(secs(cfg.workMin,cfg.workSec)<=0){ alert('Set a work time first.'); return; }
+  run.schedule = buildSchedule();
+  run.idx = 0; run.active=true; run.paused=false;
+  document.getElementById('config').classList.add('hidden');
+  document.getElementById('run').classList.remove('hidden');
+  requestWakeLock();
+  enterPhase(0);
+  if(ticker) clearInterval(ticker);
+  ticker = setInterval(tick, 100);
+}
+
+function enterPhase(i){
+  run.idx=i; run.warned=false;
+  var p = run.schedule[i];
+  run.remaining = p.dur;
+  run.endAt = Date.now() + p.dur*1000;
+  run.total = p.dur;
+
+  var runEl=document.getElementById('run');
+  var label=document.getElementById('phaseLabel');
+  var counter=document.getElementById('roundCounter');
+  var next=document.getElementById('nextLabel');
+  runEl.className='screen';
+
+  if(p.type==='prep'){
+    runEl.classList.add('phase-prep'); label.textContent='GET READY';
+    counter.textContent='Round 1 / '+cfg.rounds;
+    next.textContent='Round 1 starting…';
+    playPrepBeep();
+  } else if(p.type==='work'){
+    runEl.classList.add('phase-work'); label.textContent='ROUND '+p.round;
+    counter.textContent='Round '+p.round+' / '+cfg.rounds;
+    next.textContent = (p.round<cfg.rounds) ? 'Next: Rest' : 'Last round!';
+    playRoundStart();
+  } else if(p.type==='rest'){
+    runEl.classList.add('phase-rest'); label.textContent='REST';
+    counter.textContent='Round '+p.round+' / '+cfg.rounds+' done';
+    next.textContent='Next: Round '+(p.round+1);
+    playRest();
+  } else if(p.type==='done'){
+    runEl.classList.add('phase-done'); label.textContent='DONE';
+    counter.textContent=cfg.rounds+' rounds complete';
+    next.textContent='Great work 🥊';
+    document.getElementById('bigTime').textContent='✓';
+    document.getElementById('progressBar').style.width='100%';
+    document.getElementById('pauseBtn').textContent='AGAIN';
+    playComplete();
+    run.active=false; releaseWakeLock(); if(ticker){clearInterval(ticker);ticker=null;}
+    return;
+  }
+  runEl.classList.add('flash');
+  setTimeout(function(){ runEl.classList.remove('flash'); },500);
+  updateDisplay();
+}
+
+function tick(){
+  if(!run.active || run.paused) return;
+  var rem = (run.endAt - Date.now())/1000;
+  run.remaining = rem;
+  var p = run.schedule[run.idx];
+
+  if(p.type==='work' && cfg.warn && !run.warned && rem<=cfg.warnSec && rem>0 && cfg.warnSec<p.dur){
+    run.warned=true; playWarning();
+  }
+  if(rem<=0){
+    if(run.idx < run.schedule.length-1){ enterPhase(run.idx+1); }
+    return;
+  }
+  updateDisplay();
+}
+
+function updateDisplay(){
+  var rem = Math.max(0, Math.ceil(run.remaining));
+  var m=Math.floor(rem/60), s=rem%60;
+  document.getElementById('bigTime').textContent = m+':'+pad(s);
+  var pct = run.total>0 ? (1 - run.remaining/run.total)*100 : 0;
+  document.getElementById('progressBar').style.width = Math.min(100,Math.max(0,pct))+'%';
+}
+
+function togglePause(){
+  if(!run.active){ // finished -> restart
+    if(run.schedule.length && run.schedule[run.idx].type==='done'){ document.getElementById('pauseBtn').textContent='PAUSE'; startWorkout(); }
+    return;
+  }
+  run.paused=!run.paused;
+  document.getElementById('pauseBtn').textContent = run.paused?'RESUME':'PAUSE';
+  if(run.paused){ releaseWakeLock(); }
+  else { run.endAt = Date.now() + run.remaining*1000; requestWakeLock(); }
+}
+
+function resetWorkout(){
+  if(ticker){clearInterval(ticker);ticker=null;}
+  run.active=false; run.paused=false;
+  document.getElementById('pauseBtn').textContent='PAUSE';
+  enterPhase(0); run.active=true; run.paused=true;
+  document.getElementById('pauseBtn').textContent='RESUME';
+  // show first phase, paused, ready to resume
+  var p=run.schedule[0];
+  run.remaining=p.dur; run.total=p.dur; updateDisplay();
+}
+
+function stopWorkout(){
+  if(ticker){clearInterval(ticker);ticker=null;}
+  run.active=false; run.paused=false;
+  releaseWakeLock();
+  document.getElementById('run').classList.add('hidden');
+  document.getElementById('config').classList.remove('hidden');
+  document.getElementById('pauseBtn').textContent='PAUSE';
+  document.getElementById('bigTime').textContent='0:00';
+}
+
+/* ===================== WAKE LOCK ===================== */
+async function requestWakeLock(){
+  try{ if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); } }catch(e){}
+}
+function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible' && run.active && !run.paused){
+    requestWakeLock();
+    run.remaining = (run.endAt - Date.now())/1000; // resync after screen-off
+  }
+});
+
+/* ===================== FIGHT PHILOSOPHY QUOTES ===================== */
+var QUOTES = [
+  {q:"Everyone has a plan until they get punched in the mouth.", a:"Mike Tyson"},
+  {q:"Discipline is doing what you hate to do, but doing it like you love it.", a:"Mike Tyson"},
+  {q:"Float like a butterfly, sting like a bee.", a:"Muhammad Ali"},
+  {q:"He who is not courageous enough to take risks will accomplish nothing in life.", a:"Muhammad Ali"},
+  {q:"I hated every minute of training, but I said: suffer now and live the rest of your life as a champion.", a:"Muhammad Ali"},
+  {q:"It isn't the mountains ahead to climb that wear you out; it's the pebble in your shoe.", a:"Muhammad Ali"},
+  {q:"Don't count the days; make the days count.", a:"Muhammad Ali"},
+  {q:"I fear not the man who has practiced 10,000 kicks once, but the man who has practiced one kick 10,000 times.", a:"Bruce Lee"},
+  {q:"Be water, my friend.", a:"Bruce Lee"},
+  {q:"Do not pray for an easy life; pray for the strength to endure a difficult one.", a:"Bruce Lee"},
+  {q:"Knowing is not enough, we must apply. Willing is not enough, we must do.", a:"Bruce Lee"},
+  {q:"Defeat is a state of mind; no one is ever defeated until defeat is accepted as reality.", a:"Bruce Lee"},
+  {q:"Mistakes are always forgivable, if one has the courage to admit them.", a:"Bruce Lee"},
+  {q:"Victorious warriors win first and then go to war.", a:"Sun Tzu"},
+  {q:"In the midst of chaos, there is also opportunity.", a:"Sun Tzu"},
+  {q:"The supreme art of war is to subdue the enemy without fighting.", a:"Sun Tzu"},
+  {q:"Today is victory over yourself of yesterday.", a:"Miyamoto Musashi"},
+  {q:"Think lightly of yourself and deeply of the world.", a:"Miyamoto Musashi"},
+  {q:"There is more than one path to the top of the mountain.", a:"Miyamoto Musashi"},
+  {q:"The hero and the coward both feel the same fear; the hero just confronts it.", a:"Cus D'Amato"},
+  {q:"A champion is someone who gets up, even when he can't.", a:"Jack Dempsey"},
+  {q:"Champions aren't made in the ring; they are merely recognized there.", a:"Joe Frazier"},
+  {q:"To be a champion, you have to believe in yourself when nobody else will.", a:"Sugar Ray Robinson"},
+  {q:"The impediment to action advances action. What stands in the way becomes the way.", a:"Marcus Aurelius"},
+  {q:"It ain't about how hard you hit. It's about how hard you can get hit and keep moving forward.", a:"Rocky Balboa"}
+];
+function showQuote(){
+  var x = QUOTES[Math.floor(Math.random()*QUOTES.length)];
+  document.getElementById('qText').textContent = x.q;
+  document.getElementById('qAuthor').textContent = x.a;
+}
+function dismissQuote(e){
+  if(e) e.stopPropagation();
+  ensureAudio(); // first tap also unlocks phone audio
+  var o = document.getElementById('quoteOverlay');
+  o.classList.add('hide');
+  setTimeout(function(){ o.style.display='none'; }, 420);
+}
+
+/* ===================== INIT ===================== */
+loadStore();
+renderConfig();
+renderPresets();
+showQuote();
+</script>
+</body>
+</html>
