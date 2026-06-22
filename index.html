@@ -70,6 +70,11 @@
   .preset .del{position:absolute; top:-7px; right:-7px; width:22px; height:22px; border-radius:50%; background:#ef4444; color:#fff; border:0; font-size:13px; line-height:22px; padding:0; cursor:pointer; display:none;}
   .preset.custom .del{display:block;}
   .preset:active{border-color:var(--accent);}
+  .preset.selbell{border-color:var(--accent); background:rgba(34,197,94,.14);}
+  .preset.selbell .pmeta{color:var(--accent);}
+
+  .warndel{flex:0 0 auto; width:34px; height:34px; border-radius:10px; background:rgba(239,68,68,.14); color:#f87171; border:1px solid rgba(239,68,68,.3); font-size:18px; font-weight:800; line-height:1; cursor:pointer; margin-left:8px;}
+  .warndel:active{background:rgba(239,68,68,.28);}
 
   .soundbtns{display:flex; flex-wrap:wrap; gap:8px;}
   .soundbtns button{flex:1; min-width:120px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; color:var(--text); padding:12px; font-size:13px; font-weight:600; cursor:pointer;}
@@ -199,32 +204,38 @@
   </div>
 
   <div class="card">
-    <h2>Get Ready & Warning</h2>
+    <h2>Get Ready</h2>
     <div class="row">
       <div><div class="label">Prepare countdown</div><div class="sub">seconds before round 1</div></div>
       <div class="stepper">
         <button onclick="bump('prepare',-5)">−</button><span class="val" id="v_prepare">10</span><button onclick="bump('prepare',5)">+</button>
       </div>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>Bell sound</h2>
+    <div class="presets" id="bellList"></div>
+  </div>
+
+  <div class="card">
+    <h2>Interval / warning beeps</h2>
     <div class="row">
-      <div><div class="label">End-of-round warning</div><div class="sub">beeps near the end of work</div></div>
+      <div><div class="label">Enable warnings</div><div class="sub">beep at set times before each round ends</div></div>
       <div class="toggle on" id="warnToggle" onclick="toggleWarn()"><div class="knob"></div></div>
     </div>
-    <div class="row" id="warnSecRow">
-      <div><div class="label">Warning at</div><div class="sub">seconds remaining</div></div>
-      <div class="stepper">
-        <button onclick="bump('warnSec',-1)">−</button><span class="val" id="v_warnSec">10</span><button onclick="bump('warnSec',1)">+</button>
-      </div>
-    </div>
+    <div id="warnList"></div>
+    <div style="height:10px"></div>
+    <button class="savebtn" onclick="addWarning()">+ Add a warning beep</button>
   </div>
 
   <div class="card">
     <h2>Test sounds</h2>
     <div class="soundbtns">
       <button onclick="playRoundStart()">Round start</button>
-      <button onclick="playRest()">Round end &middot; DING&times;3</button>
-      <button onclick="playWarning()">Warning</button>
-      <button onclick="playComplete()">Finish bell</button>
+      <button onclick="playRoundEnd()">Round end</button>
+      <button onclick="playWarning()">Warning beep</button>
+      <button onclick="playFinish()">Finish</button>
     </div>
   </div>
 
@@ -253,25 +264,35 @@
 
 <script>
 /* ===================== STATE & CONFIG ===================== */
-var cfg = { rounds:12, workMin:3, workSec:0, restMin:1, restSec:0, prepare:10, warn:true, warnSec:10, muted:false };
+var cfg = { rounds:12, workMin:3, workSec:0, restMin:1, restSec:0, prepare:10, warnEnabled:true, warnings:[10], bellSound:'ring', muted:false };
 
 var limits = {
   rounds:[1,99,1], workMin:[0,30,1], workSec:[0,55,5], restMin:[0,30,1], restSec:[0,55,5],
-  prepare:[0,60,5], warnSec:[1,30,1]
+  prepare:[0,60,5]
 };
 
 var DEFAULT_PRESETS = [
-  {name:"Classic Boxing", custom:false, cfg:{rounds:12,workMin:3,workSec:0,restMin:1,restSec:0,prepare:10,warn:true,warnSec:10}},
-  {name:"Amateur 3x3",    custom:false, cfg:{rounds:3, workMin:3,workSec:0,restMin:1,restSec:0,prepare:10,warn:true,warnSec:10}},
-  {name:"HIIT Quick",     custom:false, cfg:{rounds:8, workMin:0,workSec:30,restMin:0,restSec:15,prepare:10,warn:true,warnSec:5}}
+  {name:"Classic Boxing", custom:false, cfg:{rounds:12,workMin:3,workSec:0,restMin:1,restSec:0,prepare:10,warnEnabled:true,warnings:[30,10],bellSound:'ring'}},
+  {name:"Amateur 3x3",    custom:false, cfg:{rounds:3, workMin:3,workSec:0,restMin:1,restSec:0,prepare:10,warnEnabled:true,warnings:[10],bellSound:'ring'}},
+  {name:"HIIT Quick",     custom:false, cfg:{rounds:8, workMin:0,workSec:30,restMin:0,restSec:15,prepare:10,warnEnabled:true,warnings:[10,5],bellSound:'bright'}}
 ];
 
 /* ===================== PERSISTENCE ===================== */
 function loadStore(){
-  try{
-    var saved = JSON.parse(localStorage.getItem('rt_cfg'));
-    if(saved) cfg = Object.assign(cfg, saved);
-  }catch(e){}
+  var saved = null;
+  try{ saved = JSON.parse(localStorage.getItem('rt_cfg')); }catch(e){}
+  if(saved) cfg = Object.assign(cfg, saved);
+  // migrate legacy saved configs (old single-warning shape) — key off what was saved
+  if(saved && !Array.isArray(saved.warnings)){
+    cfg.warnings = (typeof saved.warnSec==='number') ? [saved.warnSec] : (Array.isArray(cfg.warnings)?cfg.warnings:[10]);
+  }
+  if(saved && typeof saved.warnEnabled!=='boolean' && typeof saved.warn==='boolean'){
+    cfg.warnEnabled = saved.warn;
+  }
+  if(!Array.isArray(cfg.warnings)) cfg.warnings=[10];
+  if(typeof cfg.warnEnabled!=='boolean') cfg.warnEnabled=true;
+  if(!cfg.bellSound || !BELLS[cfg.bellSound]) cfg.bellSound='ring';
+  delete cfg.warn; delete cfg.warnSec;
 }
 function saveCfg(){ try{ localStorage.setItem('rt_cfg', JSON.stringify(cfg)); }catch(e){} }
 function getPresets(){
@@ -294,12 +315,54 @@ function renderConfig(){
   document.getElementById('v_restMin').textContent = cfg.restMin;
   document.getElementById('v_restSec').textContent = pad(cfg.restSec);
   document.getElementById('v_prepare').textContent = cfg.prepare;
-  document.getElementById('v_warnSec').textContent = cfg.warnSec;
-  document.getElementById('warnToggle').classList.toggle('on', cfg.warn);
-  document.getElementById('warnSecRow').style.opacity = cfg.warn ? '1' : '.4';
   document.getElementById('muteToggle').classList.toggle('on', cfg.muted);
+  renderWarnings();
+  renderBells();
 }
-function toggleWarn(){ cfg.warn=!cfg.warn; renderConfig(); saveCfg(); }
+
+/* ---- interval / warning beeps ---- */
+function toggleWarn(){ cfg.warnEnabled=!cfg.warnEnabled; renderWarnings(); saveCfg(); }
+function bumpWarning(i,d){ cfg.warnings[i]=Math.max(1, Math.min(300, (cfg.warnings[i]||0)+d)); renderWarnings(); saveCfg(); }
+function addWarning(){ cfg.warnings.push(10); cfg.warnings.sort(function(a,b){return b-a;}); renderWarnings(); saveCfg(); }
+function removeWarning(i){ cfg.warnings.splice(i,1); renderWarnings(); saveCfg(); }
+function renderWarnings(){
+  document.getElementById('warnToggle').classList.toggle('on', cfg.warnEnabled);
+  var el = document.getElementById('warnList');
+  el.style.opacity = cfg.warnEnabled ? '1' : '.4';
+  el.style.pointerEvents = cfg.warnEnabled ? 'auto' : 'none';
+  el.innerHTML='';
+  if(cfg.warnings.length===0){
+    var empty=document.createElement('div'); empty.className='row';
+    empty.innerHTML='<div><div class="sub">No warnings — add one below.</div></div>';
+    el.appendChild(empty); return;
+  }
+  cfg.warnings.forEach(function(w,i){
+    var row=document.createElement('div'); row.className='row';
+    var lab=document.createElement('div');
+    lab.innerHTML='<div class="label">Beep at '+w+'s</div><div class="sub">seconds before round ends</div>';
+    var grp=document.createElement('div'); grp.className='stepper'; grp.style.marginLeft='auto';
+    var minus=document.createElement('button'); minus.textContent='−'; minus.onclick=function(){bumpWarning(i,-1);};
+    var val=document.createElement('span'); val.className='val'; val.textContent=w;
+    var plus=document.createElement('button'); plus.textContent='+'; plus.onclick=function(){bumpWarning(i,1);};
+    grp.appendChild(minus); grp.appendChild(val); grp.appendChild(plus);
+    var del=document.createElement('button'); del.className='warndel'; del.textContent='×'; del.onclick=function(){removeWarning(i);};
+    row.appendChild(lab); row.appendChild(grp); row.appendChild(del);
+    el.appendChild(row);
+  });
+}
+
+/* ---- bell sound picker ---- */
+function renderBells(){
+  var el=document.getElementById('bellList'); el.innerHTML='';
+  Object.keys(BELLS).forEach(function(k){
+    var b=BELLS[k];
+    var d=document.createElement('div');
+    d.className='preset'+(cfg.bellSound===k?' selbell':'');
+    d.innerHTML='<div class="pname">'+b.name+'</div><div class="pmeta">'+(cfg.bellSound===k?'selected':'tap to hear')+'</div>';
+    d.onclick=function(){ cfg.bellSound=k; saveCfg(); renderBells(); ensureAudio(); bellStrike(0,0.9,BELLS[k]); };
+    el.appendChild(d);
+  });
+}
 function toggleMute(){ cfg.muted=!cfg.muted; if(masterGain) masterGain.gain.value = cfg.muted?0:1; renderConfig(); saveCfg(); }
 
 function renderPresets(){
@@ -321,7 +384,12 @@ function renderPresets(){
     list.appendChild(el);
   });
 }
-function applyPreset(pc){ cfg = Object.assign(cfg, pc); renderConfig(); saveCfg(); }
+function applyPreset(pc){
+  cfg = Object.assign(cfg, pc);
+  cfg.warnings = Array.isArray(pc.warnings) ? pc.warnings.slice() : (cfg.warnings||[10]);
+  if(!cfg.bellSound || !BELLS[cfg.bellSound]) cfg.bellSound='ring';
+  renderConfig(); saveCfg();
+}
 function saveCurrentPreset(){
   var name = prompt('Name this preset:', 'My Workout');
   if(!name) return;
@@ -329,7 +397,7 @@ function saveCurrentPreset(){
   list = list.filter(function(p){ return p.name!==name; });
   list.push({name:name, custom:true, cfg:{
     rounds:cfg.rounds,workMin:cfg.workMin,workSec:cfg.workSec,restMin:cfg.restMin,restSec:cfg.restSec,
-    prepare:cfg.prepare,warn:cfg.warn,warnSec:cfg.warnSec
+    prepare:cfg.prepare,warnEnabled:cfg.warnEnabled,warnings:cfg.warnings.slice(),bellSound:cfg.bellSound
   }});
   setPresets(list); renderPresets();
 }
@@ -359,49 +427,73 @@ function beep(freq, start, dur, type, vol){
   g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
   o.start(t); o.stop(t+dur+0.02);
 }
-function bell(start, base, vol){
-  var partials=[[1,1],[2.01,0.5],[3.0,0.28],[4.18,0.13]];
-  partials.forEach(function(p){
-    var o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.type='sine'; o.frequency.value=base*p[0];
-    o.connect(g); g.connect(masterGain);
-    var t=audioCtx.currentTime+start;
-    g.gain.setValueAtTime(0.0001,t);
-    g.gain.exponentialRampToValueAtTime((vol||0.55)*p[1], t+0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t+1.3);
-    o.start(t); o.stop(t+1.4);
-  });
-}
-// Loud, bright boxing-ring bell — one clang
-function boxingBell(start, vol){
-  vol = vol || 0.9;
+/* Selectable, realistic boxing-bell voices. Each non-buzzer bell is built from
+   inharmonic partials + a filtered "clapper" noise transient for realism. */
+var BELLS = {
+  ring:   {name:'Classic Ring',  base:740,  ratios:[[1,1],[1.5,0.62],[2.0,0.5],[2.74,0.42],[3.76,0.28],[5.4,0.18],[8.1,0.1]], decay:1.9, strike:0.55, bright:2520},
+  brass:  {name:'Brass Fight',   base:880,  ratios:[[1,1],[2.0,0.6],[3.0,0.46],[4.2,0.32],[5.4,0.2],[6.8,0.12]],              decay:1.5, strike:0.5,  bright:3100},
+  deep:   {name:'Deep Gym',      base:430,  ratios:[[1,1],[1.5,0.55],[2.0,0.5],[2.7,0.36],[3.8,0.22],[5.2,0.12]],            decay:2.7, strike:0.5,  bright:1650},
+  bright: {name:'Bright Ding',   base:1060, ratios:[[1,1],[2.0,0.55],[3.0,0.4],[4.2,0.26],[5.8,0.15]],                       decay:1.1, strike:0.42, bright:3600},
+  buzzer: {name:'Buzzer',        buzzer:true}
+};
+// One bell strike using the chosen (or passed) voice
+function bellStrike(start, vol, def){
+  def = def || BELLS[cfg.bellSound] || BELLS.ring;
+  vol = (vol==null?0.9:vol);
   var t0 = audioCtx.currentTime + start;
-  var partials = [[1,1.0],[1.5,0.55],[2.7,0.65],[5.4,0.4],[8.2,0.22]];
-  partials.forEach(function(p){
+  if(def.buzzer){
+    var ob=audioCtx.createOscillator(), gb=audioCtx.createGain();
+    ob.type='square'; ob.frequency.value=210;
+    var lfo=audioCtx.createOscillator(), lg=audioCtx.createGain();
+    lfo.type='square'; lfo.frequency.value=28; lg.gain.value=14; lfo.connect(lg); lg.connect(ob.frequency);
+    ob.connect(gb); gb.connect(masterGain);
+    gb.gain.setValueAtTime(0.0001,t0);
+    gb.gain.exponentialRampToValueAtTime(vol*0.6,t0+0.01);
+    gb.gain.setValueAtTime(vol*0.6,t0+0.32);
+    gb.gain.exponentialRampToValueAtTime(0.0001,t0+0.45);
+    ob.start(t0); ob.stop(t0+0.5); lfo.start(t0); lfo.stop(t0+0.5);
+    return;
+  }
+  // metallic partials (higher partials decay faster)
+  def.ratios.forEach(function(p){
     var o=audioCtx.createOscillator(), g=audioCtx.createGain();
-    o.type='sine'; o.frequency.value=600*p[0];
+    o.type='sine'; o.frequency.value=def.base*p[0];
     o.connect(g); g.connect(masterGain);
+    var d=def.decay*(1/(1+(p[0]-1)*0.32));
     g.gain.setValueAtTime(0.0001,t0);
     g.gain.exponentialRampToValueAtTime(vol*p[1], t0+0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0+1.5);
-    o.start(t0); o.stop(t0+1.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+d);
+    o.start(t0); o.stop(t0+d+0.05);
   });
-  var o2=audioCtx.createOscillator(), g2=audioCtx.createGain();   // metallic ping on top
-  o2.type='triangle'; o2.frequency.value=1820;
+  // clapper strike: brief band-passed noise burst
+  var dur=0.05, nb=audioCtx.createBufferSource();
+  var buf=audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate*dur), audioCtx.sampleRate);
+  var ch=buf.getChannelData(0);
+  for(var i=0;i<ch.length;i++){ ch[i]=(Math.random()*2-1)*(1-i/ch.length); }
+  nb.buffer=buf;
+  var bp=audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=def.bright||2500; bp.Q.value=0.7;
+  var ng=audioCtx.createGain();
+  nb.connect(bp); bp.connect(ng); ng.connect(masterGain);
+  ng.gain.setValueAtTime((def.strike||0.4)*vol, t0);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t0+0.06);
+  nb.start(t0); nb.stop(t0+0.07);
+  // bright shimmer
+  var o2=audioCtx.createOscillator(), g2=audioCtx.createGain();
+  o2.type='triangle'; o2.frequency.value=def.bright||2500;
   o2.connect(g2); g2.connect(masterGain);
   g2.gain.setValueAtTime(0.0001,t0);
-  g2.gain.exponentialRampToValueAtTime(vol*0.5,t0+0.003);
-  g2.gain.exponentialRampToValueAtTime(0.0001,t0+0.45);
-  o2.start(t0); o2.stop(t0+0.55);
+  g2.gain.exponentialRampToValueAtTime(vol*0.22,t0+0.004);
+  g2.gain.exponentialRampToValueAtTime(0.0001,t0+0.4);
+  o2.start(t0); o2.stop(t0+0.45);
 }
-function playRoundStart(){ ensureAudio(); bell(0,784,0.6); }                                  // single ding to start work
-function playRest(){ ensureAudio(); boxingBell(0,0.95); boxingBell(0.3,0.95); boxingBell(0.6,0.95); }   // END OF ROUND: DING DING DING
-function playWarning(){ ensureAudio(); for(var i=0;i<3;i++){ beep(1046,i*0.2,0.12,'sine',0.5);} }   // 3 high beeps
+function playRoundStart(){ ensureAudio(); bellStrike(0,0.8); }                                   // single ding to start work
+function playRoundEnd(){ ensureAudio(); bellStrike(0,0.97); bellStrike(0.3,0.97); bellStrike(0.6,0.97); }  // round over: DING DING DING
+function playFinish(){ ensureAudio(); bellStrike(0,1.0); bellStrike(0.3,1.0); bellStrike(0.6,1.0); bellStrike(0.92,1.0); } // workout done
+function playWarning(){ ensureAudio(); beep(1046,0,0.1,'sine',0.5); beep(1046,0.16,0.1,'sine',0.5); }  // double beep
 function playPrepBeep(){ ensureAudio(); beep(523,0,0.12,'sine',0.4); }
-function playComplete(){ ensureAudio(); boxingBell(0,1.0); boxingBell(0.32,1.0); boxingBell(0.64,1.0); } // FINISH: DING DING DING
 
 /* ===================== TIMER ENGINE ===================== */
-var run = { active:false, paused:false, schedule:[], idx:0, endAt:0, remaining:0, warned:false, total:0 };
+var run = { active:false, paused:false, schedule:[], idx:0, endAt:0, remaining:0, warnedSet:{}, total:0 };
 var ticker=null, wakeLock=null;
 
 function secs(m,s){ return m*60+s; }
@@ -432,7 +524,7 @@ function startWorkout(){
 }
 
 function enterPhase(i){
-  run.idx=i; run.warned=false;
+  run.idx=i; run.warnedSet={};
   var p = run.schedule[i];
   run.remaining = p.dur;
   run.endAt = Date.now() + p.dur*1000;
@@ -452,13 +544,14 @@ function enterPhase(i){
   } else if(p.type==='work'){
     runEl.classList.add('phase-work'); label.textContent='ROUND '+p.round;
     counter.textContent='Round '+p.round+' / '+cfg.rounds;
-    next.textContent = (p.round<cfg.rounds) ? 'Next: Rest' : 'Last round!';
+    if(p.round<cfg.rounds){ next.textContent = (secs(cfg.restMin,cfg.restSec)>0) ? 'Next: Rest' : 'Next: Round '+(p.round+1); }
+    else { next.textContent='Last round!'; }
     playRoundStart();
   } else if(p.type==='rest'){
     runEl.classList.add('phase-rest'); label.textContent='REST';
     counter.textContent='Round '+p.round+' / '+cfg.rounds+' done';
     next.textContent='Next: Round '+(p.round+1);
-    playRest();
+    /* end-of-round bell already rang at work-end (see tick) */
   } else if(p.type==='done'){
     runEl.classList.add('phase-done'); label.textContent='DONE';
     counter.textContent=cfg.rounds+' rounds complete';
@@ -466,7 +559,7 @@ function enterPhase(i){
     document.getElementById('bigTime').textContent='✓';
     document.getElementById('progressBar').style.width='100%';
     document.getElementById('pauseBtn').textContent='AGAIN';
-    playComplete();
+    playFinish();
     run.active=false; releaseWakeLock(); if(ticker){clearInterval(ticker);ticker=null;}
     return;
   }
@@ -481,10 +574,20 @@ function tick(){
   run.remaining = rem;
   var p = run.schedule[run.idx];
 
-  if(p.type==='work' && cfg.warn && !run.warned && rem<=cfg.warnSec && rem>0 && cfg.warnSec<p.dur){
-    run.warned=true; playWarning();
+  // multiple interval / warning beeps during the work phase
+  if(p.type==='work' && cfg.warnEnabled){
+    for(var wi=0; wi<cfg.warnings.length; wi++){
+      var w=cfg.warnings[wi];
+      if(w>0 && w<p.dur && rem<=w && rem>0 && !run.warnedSet[wi]){ run.warnedSet[wi]=true; playWarning(); }
+    }
   }
   if(rem<=0){
+    // ring the round-end bell at the end of EVERY work phase (fires even with no rest);
+    // the final round routes to 'done', which plays the finish bell instead.
+    if(p.type==='work'){
+      var nxt = run.schedule[run.idx+1];
+      if(!nxt || nxt.type!=='done'){ playRoundEnd(); }
+    }
     if(run.idx < run.schedule.length-1){ enterPhase(run.idx+1); }
     return;
   }
