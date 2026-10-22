@@ -1,0 +1,28 @@
+// Shown during rest and on the finish screen.
+export const QUOTES = [
+  { q: 'Everyone has a plan until they get punched in the mouth.', a: 'Mike Tyson' },
+  { q: 'Discipline is doing what you hate to do, but doing it like you love it.', a: 'Mike Tyson' },
+  { q: 'Float like a butterfly, sting like a bee.', a: 'Muhammad Ali' },
+  { q: 'He who is not courageous enough to take risks will accomplish nothing in life.', a: 'Muhammad Ali' },
+  { q: 'I hated every minute of training, but I said: suffer now and live the rest of your life as a champion.', a: 'Muhammad Ali' },
+  { q: "It isn't the mountains ahead to climb that wear you out; it's the pebble in your shoe.", a: 'Muhammad Ali' },
+  { q: "Don't count the days; make the days count.", a: 'Muhammad Ali' },
+  { q: 'I fear not the man who has practiced 10,000 kicks once, but the man who has practiced one kick 10,000 times.', a: 'Bruce Lee' },
+  { q: 'Be water, my friend.', a: 'Bruce Lee' },
+  { q: 'Do not pray for an easy life; pray for the strength to endure a difficult one.', a: 'Bruce Lee' },
+  { q: 'Knowing is not enough, we must apply. Willing is not enough, we must do.', a: 'Bruce Lee' },
+  { q: 'Defeat is a state of mind; no one is ever defeated until defeat is accepted as reality.', a: 'Bruce Lee' },
+  { q: 'Mistakes are always forgivable, if one has the courage to admit them.', a: 'Bruce Lee' },
+  { q: 'Victorious warriors win first and then go to war.', a: 'Sun Tzu' },
+  { q: 'In the midst of chaos, there is also opportunity.', a: 'Sun Tzu' },
+  { q: 'The supreme art of war is to subdue the enemy without fighting.', a: 'Sun Tzu' },
+  { q: 'Today is victory over yourself of yesterday.', a: 'Miyamoto Musashi' },
+  { q: 'Think lightly of yourself and deeply of the world.', a: 'Miyamoto Musashi' },
+  { q: 'There is more than one path to the top of the mountain.', a: 'Miyamoto Musashi' },
+  { q: 'The hero and the coward both feel the same fear; the hero just confronts it.', a: "Cus D'Amato" },
+  { q: "A champion is someone who gets up, even when he can't.", a: 'Jack Dempsey' },
+  { q: "Champions aren't made in the ring; they are merely recognized there.", a: 'Joe Frazier' },
+  { q: 'To be a champion, you have to believe in yourself when nobody else will.', a: 'Sugar Ray Robinson' },
+  { q: 'The impediment to action advances action. What stands in the way becomes the way.', a: 'Marcus Aurelius' },
+  { q: "It ain't about how hard you hit. It's about how hard you can get hit and keep moving forward.", a: 'Rocky Balboa' }
+];
