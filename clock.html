@@ -82,6 +82,7 @@
          padding:24px 16px calc(24px + env(safe-area-inset-bottom)); background:var(--alarm); animation:pulse 1.2s ease-in-out infinite; cursor:pointer;}
   @keyframes pulse{0%,100%{background:var(--alarm);}50%{background:#7f1d1d;}}
   #alarm .bell{font-size:72px; animation:shake .25s linear infinite;}
+  #alarm.quiet, #alarm.quiet .bell{animation:none;}
   @keyframes shake{0%,100%{transform:rotate(-12deg);}50%{transform:rotate(12deg);}}
   #alarm h2{font-size:clamp(34px,11vw,56px); font-weight:900; letter-spacing:2px; margin:10px 0 4px; text-transform:uppercase;}
   #alarm .meta{font-size:15px; font-weight:700; opacity:.85;}
@@ -144,7 +145,7 @@
       <div class="toggle" id="tickToggle" onclick="toggleTick()"><div class="knob"></div></div>
     </div>
     <div class="row">
-      <div><div class="label">Alarm</div><div class="sub">ringing bell until you tap stop</div></div>
+      <div><div class="label">Alarm</div><div class="sub">ringing bell for 10 seconds</div></div>
       <button class="smallbtn" onclick="testAlarm()">Test</button>
     </div>
   </div>
@@ -156,7 +157,7 @@
   <div class="bell">&#128276;</div>
   <h2>Time&rsquo;s up</h2>
   <div class="meta" id="alarmMeta"></div>
-  <button onclick="stopAlarm(event)">STOP</button>
+  <button id="alarmBtn" onclick="stopAlarm(event)">STOP</button>
 </div>
 
 <script>
@@ -241,7 +242,7 @@ function tickSound(dest, t, tock){
 }
 
 // Ringing alarm bell: a hammer rattling between two small bells, in bursts
-var RING_ON=1.6, RING_PERIOD=2.3, HIT=0.04;
+var RING_ON=1.6, RING_PERIOD=2.1, HIT=0.04;
 var RING_BELLS=[
   {f:1340, partials:[[1,1],[1.0035,0.5],[2.76,0.42],[5.4,0.16]]},
   {f:1590, partials:[[1,1],[1.0035,0.5],[2.76,0.42],[5.4,0.16]]}
@@ -279,13 +280,13 @@ function testAlarm(){ ensureAudio(); ringBurst(master, ctx.currentTime+0.05); }
 var state='idle';           // idle | running | paused | ringing
 var endAt=0, remainingMs=0, totalMs=0, loop=null;
 var nextTickAt=0, ringNextAt=0, nextVibeAt=0;
-var PRE_RING_MS=60000;      // alarm pre-booked on the audio clock in case the page gets throttled
+var ALARM_MS=10000;         // alarm rings for 10s, all pre-booked on the audio clock so it fires on time even if the page is throttled
 
 function alignTicks(now){ nextTickAt = endAt - Math.floor((endAt-now)/1000)*1000; }
 function preRing(now){
   ringNextAt = endAt;
   while(ringNextAt < now) ringNextAt += RING_PERIOD*1000;
-  while(ringNextAt < endAt + PRE_RING_MS){ ringBurst(bus, atWall(ringNextAt), bus.sources); ringNextAt += RING_PERIOD*1000; }
+  while(ringNextAt + RING_ON*1000 <= endAt + ALARM_MS + 50){ ringBurst(bus, atWall(ringNextAt), bus.sources); ringNextAt += RING_PERIOD*1000; }
 }
 function scheduleAudio(now){
   newBus(); alignTicks(now); preRing(now);
@@ -323,6 +324,8 @@ function reset(){
 }
 function startRinging(){
   state='ringing'; remainingMs=0; nextVibeAt=0;
+  document.getElementById('alarm').classList.remove('quiet');
+  document.getElementById('alarmBtn').textContent='STOP';
   document.getElementById('alarmMeta').textContent = fmt(Math.round(totalMs/1000))+' timer finished';
   document.title='Time’s up';
 }
@@ -348,11 +351,13 @@ function step(){
     if(now>=endAt) startRinging();
   }
   if(state==='ringing'){
-    while(ringNextAt < now+3000){
-      if(ringNextAt >= now-500) ringBurst(bus, atWall(ringNextAt), bus.sources);
-      ringNextAt += RING_PERIOD*1000;
-    }
-    if(now>=nextVibeAt){
+    if(now >= endAt + ALARM_MS){
+      // bell has finished: go quiet, leave the screen up until dismissed
+      if(loop){ clearInterval(loop); loop=null; }
+      releaseWakeLock();
+      document.getElementById('alarm').classList.add('quiet');
+      document.getElementById('alarmBtn').textContent='DONE';
+    } else if(now>=nextVibeAt){
       try{ if(navigator.vibrate) navigator.vibrate(RING_ON*1000); }catch(err){}
       nextVibeAt = now + RING_PERIOD*1000;
     }
