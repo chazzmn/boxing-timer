@@ -31,6 +31,8 @@
   .brand .dot{width:14px; height:14px; border-radius:50%; background:var(--accent); box-shadow:0 0 14px var(--accent);}
   .brand h1{font-size:20px; letter-spacing:.5px; margin:0; font-weight:800;}
   .brand .mute{margin-left:auto;}
+  .brand .navlink{margin-left:auto; color:var(--muted); text-decoration:none; font-size:13px; font-weight:700; background:var(--panel2); border:1px solid var(--line); padding:8px 12px; border-radius:12px;}
+  .brand .navlink + .mute{margin-left:0;}
 
   .card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:14px; margin-bottom:14px;}
   .card h2{font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:0 0 12px;}
@@ -147,6 +149,7 @@
   <div class="brand">
     <span class="dot"></span>
     <h1>ROUND TIMER</h1>
+    <a class="navlink" href="clock.html">Clock &rsaquo;</a>
     <div class="mute row" style="padding:0;">
       <div class="toggle" id="muteToggle" onclick="toggleMute()"><div class="knob"></div></div>
     </div>
