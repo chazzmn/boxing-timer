@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Ticking Clock</title>
+<style>
+  :root{
+    --bg:#0b1120; --panel:#111a2e; --panel2:#1b2740; --line:#27344f;
+    --text:#f1f5f9; --muted:#8a9bbb; --accent:#22c55e; --warn:#f59e0b; --alarm:#dc2626;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; min-height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text);
+    -webkit-user-select:none; user-select:none;
+  }
+  .hidden{display:none !important;}
+  .wrap{max-width:520px; margin:0 auto; min-height:100vh; min-height:100dvh; display:flex; flex-direction:column;
+        padding:max(16px,env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom));}
+
+  .top{display:flex; align-items:center; gap:10px; margin:6px 2px 6px;}
+  .top .dot{width:14px; height:14px; border-radius:50%; background:var(--accent); box-shadow:0 0 14px var(--accent);}
+  .top h1{font-size:20px; letter-spacing:.5px; margin:0; font-weight:800;}
+  .back{margin-left:auto; color:var(--muted); text-decoration:none; font-size:13px; font-weight:700; background:var(--panel2); border:1px solid var(--line); padding:8px 12px; border-radius:12px;}
+
+  /* ---------- DIAL ---------- */
+  .dial{position:relative; width:min(76vw, 38vh, 340px); aspect-ratio:1/1; margin:8px auto 14px;}
+  .dial svg{position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg);}
+  .dial .track{fill:none; stroke:var(--panel2); stroke-width:6;}
+  .dial .arc{fill:none; stroke:var(--accent); stroke-width:6; stroke-linecap:round; transition:stroke-dashoffset .2s linear, stroke .4s;}
+  .dial.last .arc{stroke:var(--warn);}
+  .dial .marks line{stroke:var(--line); stroke-width:1;}
+  .hand{position:absolute; inset:0; transition:transform .16s cubic-bezier(.3,1.7,.5,1);}
+  .hand.notrans{transition:none;}
+  .hand .pip{position:absolute; left:50%; top:calc(6% - 6px); width:12px; height:12px; margin-left:-6px; border-radius:50%; background:#fff; box-shadow:0 0 10px rgba(255,255,255,.6);}
+  .readout{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+  .readout .time{font-size:clamp(52px,17vw,92px); font-weight:900; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:-1px;}
+  .readout .status{margin-top:8px; font-size:13px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); font-weight:700; min-height:16px;}
+
+  /* ---------- CARDS ---------- */
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin:0 0 12px;}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:8px 12px; padding:8px 0; flex-wrap:wrap;}
+  .row + .row{border-top:1px solid var(--line);}
+  .row > :first-child{min-width:0; flex:1 1 auto;}
+  .row .label{font-size:16px; font-weight:600;}
+  .row .sub{font-size:12px; color:var(--muted); margin-top:2px;}
+
+  .stepper{display:flex; align-items:center; background:var(--panel2); border-radius:12px; overflow:hidden; border:1px solid var(--line); flex:0 0 auto;}
+  .stepper button{width:42px; height:44px; border:0; background:transparent; color:var(--text); font-size:24px; font-weight:700; line-height:1; cursor:pointer;}
+  .stepper button:active{background:rgba(255,255,255,.08);}
+  .stepper .val{min-width:44px; text-align:center; font-size:20px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .timefield{display:flex; align-items:center; gap:6px; margin-left:auto; flex:0 0 auto;}
+  .timefield .colon{font-size:20px; font-weight:800; color:var(--muted);}
+
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;}
+  .chip{flex:1 1 0; min-width:56px; background:var(--panel2); border:1px solid var(--line); border-radius:12px; color:var(--text); padding:10px 0; font-size:15px; font-weight:800; cursor:pointer; font-variant-numeric:tabular-nums;}
+  .chip.sel{border-color:var(--accent); background:rgba(34,197,94,.14); color:var(--accent);}
+
+  .toggle{position:relative; width:58px; height:34px; border-radius:20px; background:var(--panel2); border:1px solid var(--line); cursor:pointer; transition:background .2s; flex:0 0 auto;}
+  .toggle .knob{position:absolute; top:3px; left:3px; width:26px; height:26px; border-radius:50%; background:#64748b; transition:.2s;}
+  .toggle.on{background:var(--accent); border-color:var(--accent);}
+  .toggle.on .knob{left:27px; background:#fff;}
+  .smallbtn{flex:0 0 auto; background:var(--panel2); border:1px solid var(--line); border-radius:12px; color:var(--text); padding:10px 16px; font-size:14px; font-weight:700; cursor:pointer;}
+  .smallbtn:active{background:rgba(255,255,255,.08);}
+
+  /* ---------- CONTROLS ---------- */
+  .controls{display:flex; gap:12px; margin-bottom:14px;}
+  .controls button{flex:1; padding:20px 0; border:0; border-radius:18px; font-size:20px; font-weight:900; letter-spacing:1px; cursor:pointer;}
+  .controls .go{background:var(--accent); color:#04210f; box-shadow:0 8px 28px rgba(34,197,94,.35);}
+  .controls .go:disabled{opacity:.4; box-shadow:none;}
+  .controls .ghost{background:var(--panel2); color:var(--text); border:1px solid var(--line);}
+  .controls button:active{transform:translateY(1px);}
+  .hint{text-align:center; font-size:12px; color:var(--muted); margin:12px 0 0; opacity:.8;}
+
+  /* ---------- ALARM OVERLAY ---------- */
+  #alarm{position:fixed; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;
+         padding:24px 16px calc(24px + env(safe-area-inset-bottom)); background:var(--alarm); animation:pulse 1.2s ease-in-out infinite; cursor:pointer;}
+  @keyframes pulse{0%,100%{background:var(--alarm);}50%{background:#7f1d1d;}}
+  #alarm .bell{font-size:72px; animation:shake .25s linear infinite;}
+  #alarm.quiet, #alarm.quiet .bell{animation:none;}
+  @keyframes shake{0%,100%{transform:rotate(-12deg);}50%{transform:rotate(12deg);}}
+  #alarm h2{font-size:clamp(34px,11vw,56px); font-weight:900; letter-spacing:2px; margin:10px 0 4px; text-transform:uppercase;}
+  #alarm .meta{font-size:15px; font-weight:700; opacity:.85;}
+  #alarm button{margin-top:36px; width:min(100%,360px); padding:22px 0; border:0; border-radius:18px; background:#fff; color:#0b1120; font-size:24px; font-weight:900; letter-spacing:2px; cursor:pointer;}
+
+  @media (max-width:400px){
+    .card{padding:12px;}
+    .stepper button{width:38px; height:42px; font-size:21px;}
+    .stepper .val{min-width:38px; font-size:18px;}
+    .row .label{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <span class="dot"></span>
+    <h1>CLOCK</h1>
+    <a class="back" href="index.html">&lsaquo; Round timer</a>
+  </div>
+
+  <div class="dial" id="dial">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <g class="marks" id="marks"></g>
+      <circle class="track" cx="50" cy="50" r="44"></circle>
+      <circle class="arc" id="arc" cx="50" cy="50" r="44"></circle>
+    </svg>
+    <div class="hand notrans" id="hand"><div class="pip"></div></div>
+    <div class="readout">
+      <div class="time" id="time">10:00</div>
+      <div class="status" id="status">Ready</div>
+    </div>
+  </div>
+
+  <div class="card" id="setup">
+    <h2>Set timer</h2>
+    <div class="row">
+      <div><div class="label">Length</div><div class="sub">minutes : seconds</div></div>
+      <div class="timefield">
+        <div class="stepper">
+          <button onclick="bump('min',-1)">&minus;</button><span class="val" id="v_min">10</span><button onclick="bump('min',1)">+</button>
+        </div>
+        <span class="colon">:</span>
+        <div class="stepper">
+          <button onclick="bump('sec',-5)">&minus;</button><span class="val" id="v_sec">00</span><button onclick="bump('sec',5)">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="controls" id="controls">
+    <button class="ghost hidden" id="resetBtn" onclick="reset()">RESET</button>
+    <button class="go" id="mainBtn" onclick="mainAction()">START</button>
+  </div>
+  <div class="card">
+    <h2>Sound</h2>
+    <div class="row">
+      <div><div class="label">Ticking</div><div class="sub">soft tick-tock while it runs</div></div>
+      <div class="toggle" id="tickToggle" onclick="toggleTick()"><div class="knob"></div></div>
+    </div>
+    <div class="row">
+      <div><div class="label">Alarm</div><div class="sub">ringing bell for 10 seconds</div></div>
+      <button class="smallbtn" onclick="testAlarm()">Test</button>
+    </div>
+  </div>
+
+  <p class="hint">Keep this page open. The screen stays awake while the timer runs.</p>
+</div>
+
+<div id="alarm" class="hidden" onclick="stopAlarm()">
+  <div class="bell">&#128276;</div>
+  <h2>Time&rsquo;s up</h2>
+  <div class="meta" id="alarmMeta"></div>
+  <button id="alarmBtn" onclick="stopAlarm(event)">STOP</button>
+</div>
+
+<script>
+/* ===================== SETTINGS ===================== */
+var cfg = { min:10, sec:0, tick:true };
+var QUICK = [5,10,15,25,50];
+try{
+  var saved = JSON.parse(localStorage.getItem('ck_cfg'));
+  if(saved){
+    if(typeof saved.min==='number') cfg.min = Math.max(0, Math.min(180, saved.min));
+    if(typeof saved.sec==='number') cfg.sec = Math.max(0, Math.min(55, saved.sec));
+    if(typeof saved.tick==='boolean') cfg.tick = saved.tick;
+  }
+}catch(e){}
+function save(){ try{ localStorage.setItem('ck_cfg', JSON.stringify(cfg)); }catch(e){} }
+
+function pad(n){ return (n<10?'0':'')+n; }
+function fmt(totalSec){
+  var h=Math.floor(totalSec/3600), m=Math.floor(totalSec%3600/60), s=totalSec%60;
+  return h ? h+':'+pad(m)+':'+pad(s) : m+':'+pad(s);
+}
+function setMs(){ return (cfg.min*60+cfg.sec)*1000; }
+
+function bump(key, d){
+  ensureAudio();
+  if(state!=='idle') return;
+  if(key==='min') cfg.min = Math.max(0, Math.min(180, cfg.min+d));
+  else cfg.sec = Math.max(0, Math.min(55, cfg.sec+d));
+  save(); render();
+}
+function quick(m){ ensureAudio(); if(state!=='idle') return; cfg.min=m; cfg.sec=0; save(); render(); }
+function toggleTick(){
+  ensureAudio();
+  cfg.tick = !cfg.tick; save(); render();
+  if(cfg.tick && state!=='running') tickSound(master, ctx.currentTime+0.02, false); // preview
+}
+
+/* ===================== AUDIO (Web Audio API) ===================== */
+var ctx=null, master=null, noiseBuf=null, bus=null;
+function ensureAudio(){
+  if(!ctx){
+    ctx = new (window.AudioContext||window.webkitAudioContext)();
+    var comp = ctx.createDynamicsCompressor(); // keeps the alarm loud without clipping
+    comp.threshold.value=-6; comp.knee.value=6; comp.ratio.value=8;
+    master = ctx.createGain(); master.gain.value=1;
+    master.connect(comp); comp.connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    var ch=noiseBuf.getChannelData(0);
+    for(var i=0;i<ch.length;i++) ch[i]=Math.random()*2-1;
+  }
+  if(ctx.state==='suspended') ctx.resume();
+}
+// Wall-clock ms -> audio-clock seconds
+function atWall(ms){ return Math.max(ctx.currentTime, ctx.currentTime + (ms-Date.now())/1000); }
+
+// Everything scheduled for a run goes through one bus, so pause/reset can silence it in one go.
+function newBus(){ bus = ctx.createGain(); bus.connect(master); bus.sources=[]; }
+function killBus(){
+  if(!bus) return;
+  var b=bus; bus=null;
+  b.sources.forEach(function(s){ try{ s.stop(0); }catch(e){} });
+  try{ b.gain.setTargetAtTime(0, ctx.currentTime, 0.01); }catch(e){}
+  setTimeout(function(){ try{ b.disconnect(); }catch(e){} }, 150);
+}
+
+// Soft wooden tick-tock, like a quiet analogue wall clock
+function tickSound(dest, t, tock){
+  var nz=ctx.createBufferSource(); nz.buffer=noiseBuf;
+  var bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=tock?2100:2900; bp.Q.value=3;
+  var g=ctx.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(1.0,t+0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.03);
+  nz.connect(bp); bp.connect(g); g.connect(dest);
+  nz.start(t, Math.random()*0.5); nz.stop(t+0.05);
+  var o=ctx.createOscillator(), og=ctx.createGain();
+  o.type='sine'; o.frequency.value=tock?760:980;
+  og.gain.setValueAtTime(0.0001,t);
+  og.gain.exponentialRampToValueAtTime(0.1,t+0.002);
+  og.gain.exponentialRampToValueAtTime(0.0001,t+0.06);
+  o.connect(og); og.connect(dest); o.start(t); o.stop(t+0.08);
+}
+
+// Ringing alarm bell: a hammer rattling between two small bells, in bursts
+var RING_ON=1.6, RING_PERIOD=2.1, HIT=0.04;
+var RING_BELLS=[
+  {f:1340, partials:[[1,1],[1.0035,0.5],[2.76,0.42],[5.4,0.16]]},
+  {f:1590, partials:[[1,1],[1.0035,0.5],[2.76,0.42],[5.4,0.16]]}
+];
+function ringBurst(dest, t0, list){
+  var out=ctx.createGain(); out.gain.value=0.32; out.connect(dest);
+  var n=Math.floor(RING_ON/HIT);
+  RING_BELLS.forEach(function(b, bi){
+    var env=ctx.createGain(); env.gain.setValueAtTime(0,t0); env.connect(out);
+    b.partials.forEach(function(p){
+      var o=ctx.createOscillator(), g=ctx.createGain();
+      o.type='sine'; o.frequency.value=b.f*p[0]; g.gain.value=p[1];
+      o.connect(g); g.connect(env);
+      o.start(t0); o.stop(t0+RING_ON+1.8);
+      if(list) list.push(o);
+    });
+    for(var i=bi;i<n;i+=2){
+      var th=t0+i*HIT, last=(i+2>=n);
+      env.gain.setValueAtTime(0.78+Math.random()*0.22, th);
+      env.gain.setTargetAtTime(0, th+0.001, last?0.32:0.03);
+    }
+  });
+  // hammer clicks
+  var nz=ctx.createBufferSource(); nz.buffer=noiseBuf; nz.loop=true;
+  var bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=4200; bp.Q.value=1.2;
+  var ce=ctx.createGain(); ce.gain.setValueAtTime(0,t0);
+  nz.connect(bp); bp.connect(ce); ce.connect(out);
+  for(var j=0;j<n;j++){ var tj=t0+j*HIT; ce.gain.setValueAtTime(0.5,tj); ce.gain.setTargetAtTime(0,tj+0.001,0.004); }
+  nz.start(t0); nz.stop(t0+RING_ON+0.1);
+  if(list) list.push(nz);
+}
+function testAlarm(){ ensureAudio(); ringBurst(master, ctx.currentTime+0.05); }
+
+/* ===================== TIMER ===================== */
+var state='idle';           // idle | running | paused | ringing
+var endAt=0, remainingMs=0, totalMs=0, loop=null;
+var nextTickAt=0, ringNextAt=0, nextVibeAt=0;
+var ALARM_MS=10000;         // alarm rings for 10s, all pre-booked on the audio clock so it fires on time even if the page is throttled
+
+function alignTicks(now){ nextTickAt = endAt - Math.floor((endAt-now)/1000)*1000; }
+function preRing(now){
+  ringNextAt = endAt;
+  while(ringNextAt < now) ringNextAt += RING_PERIOD*1000;
+  while(ringNextAt + RING_ON*1000 <= endAt + ALARM_MS + 50){ ringBurst(bus, atWall(ringNextAt), bus.sources); ringNextAt += RING_PERIOD*1000; }
+}
+function scheduleAudio(now){
+  newBus(); alignTicks(now); preRing(now);
+}
+
+function mainAction(){
+  ensureAudio();
+  if(state==='idle') start();
+  else if(state==='running') pause();
+  else if(state==='paused') resume();
+}
+function start(){
+  if(setMs()<=0) return;
+  totalMs=setMs(); remainingMs=totalMs;
+  resume();
+}
+function resume(){
+  var now=Date.now();
+  state='running';
+  endAt = now + remainingMs;
+  scheduleAudio(now);
+  requestWakeLock();
+  if(!loop) loop=setInterval(step, 200);
+  step();
+}
+function pause(){
+  remainingMs=Math.max(0, endAt-Date.now());
+  state='paused';
+  killBus(); releaseWakeLock(); render();
+}
+function reset(){
+  if(loop){ clearInterval(loop); loop=null; }
+  killBus(); releaseWakeLock();
+  state='idle'; remainingMs=0; render();
+}
+function startRinging(){
+  state='ringing'; remainingMs=0; nextVibeAt=0;
+  document.getElementById('alarm').classList.remove('quiet');
+  document.getElementById('alarmBtn').textContent='STOP';
+  document.getElementById('alarmMeta').textContent = fmt(Math.round(totalMs/1000))+' timer finished';
+  document.title='Time’s up';
+}
+function stopAlarm(e){
+  if(e) e.stopPropagation();
+  try{ if(navigator.vibrate) navigator.vibrate(0); }catch(err){}
+  document.title='Ticking Clock';
+  reset();
+}
+
+function step(){
+  var now=Date.now();
+  if(state==='running'){
+    remainingMs=Math.max(0, endAt-now);
+    // ticks are booked ~1.5s ahead on the audio clock so they land exactly on the second
+    while(nextTickAt < now+1500 && nextTickAt < endAt-100){
+      if(cfg.tick && nextTickAt >= now-250){
+        var k=Math.round((endAt-nextTickAt)/1000);
+        tickSound(bus, atWall(nextTickAt), k%2===1);
+      }
+      nextTickAt+=1000;
+    }
+    if(now>=endAt) startRinging();
+  }
+  if(state==='ringing'){
+    if(now >= endAt + ALARM_MS){
+      // bell has finished: go quiet, leave the screen up until dismissed
+      if(loop){ clearInterval(loop); loop=null; }
+      releaseWakeLock();
+      document.getElementById('alarm').classList.add('quiet');
+      document.getElementById('alarmBtn').textContent='DONE';
+    } else if(now>=nextVibeAt){
+      try{ if(navigator.vibrate) navigator.vibrate(RING_ON*1000); }catch(err){}
+      nextVibeAt = now + RING_PERIOD*1000;
+    }
+  }
+  render();
+}
+
+/* ===================== RENDER ===================== */
+var CIRC = 2*Math.PI*44;
+(function buildDial(){
+  var g=document.getElementById('marks'), s='';
+  for(var i=0;i<60;i++){
+    var a=i*6*Math.PI/180, r1=(i%5===0)?47.5:48.5, r2=50;
+    s+='<line x1="'+(50+r1*Math.cos(a)).toFixed(2)+'" y1="'+(50+r1*Math.sin(a)).toFixed(2)+'" x2="'+(50+r2*Math.cos(a)).toFixed(2)+'" y2="'+(50+r2*Math.sin(a)).toFixed(2)+'"/>';
+  }
+  g.innerHTML=s;
+  var arc=document.getElementById('arc');
+  arc.style.strokeDasharray=CIRC.toFixed(2);
+  var c=document.getElementById('chips'), h='';
+  QUICK.forEach(function(m){ h+='<button class="chip" data-m="'+m+'" onclick="quick('+m+')">'+m+'m</button>'; });
+  c.innerHTML=h;
+})();
+
+function render(){
+  var secLeft, frac, elapsed;
+  if(state==='idle'){ secLeft=setMs()/1000; frac=1; elapsed=0; }
+  else if(state==='ringing'){ secLeft=0; frac=0; elapsed=Math.round(totalMs/1000); }
+  else { secLeft=Math.ceil(remainingMs/1000); frac=totalMs?remainingMs/totalMs:0; elapsed=Math.round(totalMs/1000)-secLeft; }
+
+  document.getElementById('time').textContent = fmt(secLeft);
+  document.getElementById('arc').style.strokeDashoffset = (CIRC*(1-frac)).toFixed(2);
+  var dial=document.getElementById('dial');
+  dial.classList.toggle('last', state!=='idle' && secLeft<=60);
+  var hand=document.getElementById('hand');
+  hand.classList.toggle('notrans', state==='idle');
+  hand.style.transform='rotate('+(elapsed*6)+'deg)';
+
+  var st='Ready';
+  if(state==='running'){ var d=new Date(endAt); st='Ends '+pad(d.getHours())+':'+pad(d.getMinutes()); }
+  else if(state==='paused') st='Paused';
+  else if(state==='ringing') st='Time’s up';
+  document.getElementById('status').textContent=st;
+
+  document.getElementById('v_min').textContent=cfg.min;
+  document.getElementById('v_sec').textContent=pad(cfg.sec);
+  Array.prototype.forEach.call(document.querySelectorAll('.chip'), function(b){
+    b.classList.toggle('sel', +b.getAttribute('data-m')===cfg.min && cfg.sec===0);
+  });
+  document.getElementById('tickToggle').classList.toggle('on', cfg.tick);
+  document.getElementById('setup').classList.toggle('hidden', state!=='idle');
+
+  var main=document.getElementById('mainBtn');
+  main.textContent = state==='running' ? 'PAUSE' : state==='paused' ? 'RESUME' : 'START';
+  main.className = state==='idle' ? 'go' : (state==='paused' ? 'go' : 'ghost');
+  main.disabled = state==='idle' && setMs()<=0;
+  document.getElementById('resetBtn').classList.toggle('hidden', state==='idle' || state==='ringing');
+  document.getElementById('alarm').classList.toggle('hidden', state!=='ringing');
+}
+
+/* ===================== WAKE LOCK ===================== */
+var wakeLock=null;
+async function requestWakeLock(){
+  try{ if('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', function(){ wakeLock=null; }); } }catch(e){}
+}
+function releaseWakeLock(){ try{ if(wakeLock){ wakeLock.release(); wakeLock=null; } }catch(e){} }
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState!=='visible') return;
+  if(state==='running' || state==='ringing') requestWakeLock();
+  // re-anchor audio to the clock after the page has been in the background
+  if(state==='running' && ctx && endAt-Date.now()>1000){ killBus(); scheduleAudio(Date.now()); }
+  if(state!=='idle') step();
+});
+
+render();
+</script>
+</body>
+</html>
