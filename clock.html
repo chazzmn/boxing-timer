@@ -141,7 +141,7 @@
   <div class="card">
     <h2>Sound</h2>
     <div class="row">
-      <div><div class="label">Ticking</div><div class="sub">dramatic tick-tock, speeds up at the end</div></div>
+      <div><div class="label">Ticking</div><div class="sub">relentless tick while it runs</div></div>
       <div class="toggle" id="tickToggle" onclick="toggleTick()"><div class="knob"></div></div>
     </div>
     <div class="row">
@@ -192,11 +192,11 @@ function quick(m){ ensureAudio(); if(state!=='idle') return; cfg.min=m; cfg.sec=
 function toggleTick(){
   ensureAudio();
   cfg.tick = !cfg.tick; save(); render();
-  if(cfg.tick && state!=='running') tickSound(master, ctx.currentTime+0.02, false); // preview
+  if(cfg.tick && state!=='running') tickSound(master, ctx.currentTime+0.02); // preview
 }
 
 /* ===================== AUDIO (Web Audio API) ===================== */
-var ctx=null, master=null, noiseBuf=null, bus=null, echo=null;
+var ctx=null, master=null, noiseBuf=null, bus=null;
 function ensureAudio(){
   if(!ctx){
     ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -207,12 +207,6 @@ function ensureAudio(){
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     var ch=noiseBuf.getChannelData(0);
     for(var i=0;i<ch.length;i++) ch[i]=Math.random()*2-1;
-    // short hall echo for the ticks: a dark repeating delay
-    echo = ctx.createDelay(1); echo.delayTime.value=0.13;
-    var fb=ctx.createGain(); fb.gain.value=0.32;
-    var lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1600;
-    var wet=ctx.createGain(); wet.gain.value=0.45;
-    echo.connect(lp); lp.connect(fb); fb.connect(echo); lp.connect(wet); wet.connect(master);
   }
   if(ctx.state==='suspended') ctx.resume();
 }
@@ -220,46 +214,34 @@ function ensureAudio(){
 function atWall(ms){ return Math.max(ctx.currentTime, ctx.currentTime + (ms-Date.now())/1000); }
 
 // Everything scheduled for a run goes through one bus, so pause/reset can silence it in one go.
-function newBus(){ bus = ctx.createGain(); bus.connect(master); bus.sources=[]; bus.send = ctx.createGain(); bus.send.connect(echo); }
+function newBus(){ bus = ctx.createGain(); bus.connect(master); bus.sources=[]; }
 function killBus(){
   if(!bus) return;
   var b=bus; bus=null;
   b.sources.forEach(function(s){ try{ s.stop(0); }catch(e){} });
-  try{ b.gain.setTargetAtTime(0, ctx.currentTime, 0.01); b.send.gain.setTargetAtTime(0, ctx.currentTime, 0.01); }catch(e){}
-  setTimeout(function(){ try{ b.disconnect(); b.send.disconnect(); }catch(e){} }, 150);
+  try{ b.gain.setTargetAtTime(0, ctx.currentTime, 0.01); }catch(e){}
+  setTimeout(function(){ try{ b.disconnect(); }catch(e){} }, 150);
 }
 
-// Theatrical tick-tock: a heavy clack with a low thump and a hall echo, like a big clock in an empty room.
-// urgency (0..1) raises the pitch and weight in the final seconds.
-function tickSound(dest, t, tock, urgency){
-  var u=urgency||0, pm=1+0.3*u;
-  var out=ctx.createGain(); out.gain.value=0.9+0.3*u;
-  out.connect(dest); out.connect(dest===bus && bus.send ? bus.send : echo);
-  // clack
+// Relentless dry tick, like a cheap plastic wall clock in a therapy room. Every tick is identical.
+function tickSound(dest, t){
+  var out=ctx.createGain(); out.gain.value=1.1; out.connect(dest);
+  // sharp click
   var nz=ctx.createBufferSource(); nz.buffer=noiseBuf;
-  var bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=(tock?1500:2100)*pm; bp.Q.value=2.2;
+  var bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3400; bp.Q.value=2.5;
   var g=ctx.createGain();
   g.gain.setValueAtTime(0.0001,t);
-  g.gain.exponentialRampToValueAtTime(1.0,t+0.001);
-  g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+  g.gain.exponentialRampToValueAtTime(1.0,t+0.0008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.022);
   nz.connect(bp); bp.connect(g); g.connect(out);
-  nz.start(t, Math.random()*0.5); nz.stop(t+0.07);
-  // low thump with a pitch drop
-  var th=ctx.createOscillator(), tg=ctx.createGain();
-  th.type='sine';
-  th.frequency.setValueAtTime((tock?120:150)*pm,t);
-  th.frequency.exponentialRampToValueAtTime(55,t+0.12);
-  tg.gain.setValueAtTime(0.0001,t);
-  tg.gain.exponentialRampToValueAtTime(0.7,t+0.003);
-  tg.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
-  th.connect(tg); tg.connect(out); th.start(t); th.stop(t+0.16);
-  // metallic ping from the escapement
+  nz.start(t, Math.random()*0.5); nz.stop(t+0.03);
+  // thin plastic body
   var o=ctx.createOscillator(), og=ctx.createGain();
-  o.type='triangle'; o.frequency.value=(tock?820:1100)*pm;
+  o.type='square'; o.frequency.value=1850;
   og.gain.setValueAtTime(0.0001,t);
-  og.gain.exponentialRampToValueAtTime(0.16,t+0.002);
-  og.gain.exponentialRampToValueAtTime(0.0001,t+0.09);
-  o.connect(og); og.connect(out); o.start(t); o.stop(t+0.11);
+  og.gain.exponentialRampToValueAtTime(0.06,t+0.001);
+  og.gain.exponentialRampToValueAtTime(0.0001,t+0.025);
+  o.connect(og); og.connect(out); o.start(t); o.stop(t+0.035);
 }
 
 // Ringing alarm bell: a hammer rattling between two small bells, in bursts
@@ -302,7 +284,7 @@ var state='idle';           // idle | running | paused | ringing
 var endAt=0, remainingMs=0, totalMs=0, loop=null;
 var nextTickAt=0, ringNextAt=0, nextVibeAt=0;
 var ALARM_MS=10000;
-var TICK_MS=500, FAST_TICK_MS=250, FAST_FROM_MS=10000; // two ticks a second, four in the last 10s         // alarm rings for 10s, all pre-booked on the audio clock so it fires on time even if the page is throttled
+var TICK_MS=500; // two identical ticks a second, steady to the end         // alarm rings for 10s, all pre-booked on the audio clock so it fires on time even if the page is throttled
 
 function alignTicks(now){ nextTickAt = endAt - Math.floor((endAt-now)/TICK_MS)*TICK_MS; }
 function preRing(now){
@@ -364,13 +346,8 @@ function step(){
     remainingMs=Math.max(0, endAt-now);
     // ticks are booked ~1.5s ahead on the audio clock so they land exactly on the beat
     while(nextTickAt < now+1500 && nextTickAt < endAt-100){
-      var left=endAt-nextTickAt, iv=left<=FAST_FROM_MS?FAST_TICK_MS:TICK_MS;
-      if(cfg.tick && nextTickAt >= now-150){
-        var k=Math.round(left/iv);
-        var urgency=left<=FAST_FROM_MS ? 1-left/FAST_FROM_MS : 0;
-        tickSound(bus, atWall(nextTickAt), k%2===1, urgency);
-      }
-      nextTickAt+=iv;
+      if(cfg.tick && nextTickAt >= now-150) tickSound(bus, atWall(nextTickAt));
+      nextTickAt+=TICK_MS;
     }
     if(now>=endAt) startRinging();
   }
